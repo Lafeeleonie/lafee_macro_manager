@@ -1,0 +1,11 @@
+## Interface: 120005, 120007, 120100
+## Title: Lafee Macro Manager
+## Notes: Edit character and global macros with a minimap button.
+## Author: Lafee
+## Version: 0.5.7
+## OptionalDeps: ElvUI
+## IconTexture: Interface\Icons\INV_Scroll_03
+## SavedVariables: LafeeMacroManagerGlobalDB
+## SavedVariablesPerCharacter: LafeeMacroManagerDB
+
+Lafee_macro_manager.lua
