@@ -1,4 +1,5 @@
 local addonName = ...
+local DISPLAY_NAME = "Lafee Macro Manager"
 
 local ADDON = {}
 local CHARACTER_MACRO_LIMIT = MAX_CHARACTER_MACROS or 30
@@ -415,7 +416,7 @@ function ADDON:RefreshCharacterIdentity()
 end
 
 function ADDON:Print(message)
-    DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff69ccf0%s|r: %s", addonName, message))
+    DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff69ccf0%s|r: %s", DISPLAY_NAME, message))
 end
 
 function ADDON:Debug(message)
