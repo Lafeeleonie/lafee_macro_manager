@@ -8,4 +8,5 @@
 ## SavedVariables: LafeeMacroManagerGlobalDB
 ## SavedVariablesPerCharacter: LafeeMacroManagerDB
 
+EscapeClose.lua
 Lafee_macro_manager.lua
