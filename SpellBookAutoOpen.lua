@@ -1,8 +1,6 @@
 local addonName = ...
 local frameName = addonName .. "Frame"
 local minimapButtonName = addonName .. "MinimapButton"
-local globalTabName = addonName .. "GlobalTab"
-local characterTabName = addonName .. "CharacterTab"
 
 local openedSpellBookByLMM = false
 local editorHooked = false
@@ -107,16 +105,8 @@ local function configureEditorFrame()
     frame:SetFrameLevel(math.max(frame:GetFrameLevel() or 0, 6000))
     frame:SetToplevel(true)
 
-    -- The main addon still contains a couple of old FR/EN-only tab labels.
-    -- Correct the visible labels from the standalone localization table here.
-    local text = _G.LafeeMacroManagerText
-    local globalTab = _G[globalTabName]
-    local characterTab = _G[characterTabName]
-    if text and globalTab and text.globalTab then
-        globalTab:SetText(text.globalTab)
-    end
-    if text and characterTab and text.characterTab then
-        characterTab:SetText(text.characterTab)
+    if type(_G.LafeeMacroManagerApplyRuntimeLocalization) == "function" then
+        _G.LafeeMacroManagerApplyRuntimeLocalization(frame)
     end
 
     if not editorHooked then
