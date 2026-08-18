@@ -11,6 +11,19 @@ if type(UISpecialFrames) == "table" then
     table.insert(UISpecialFrames, frameName)
 end
 
+local function ensurePlayerSpellsLoaded()
+    if PlayerSpellsFrame and PlayerSpellsUtil then
+        return true
+    end
+
+    if type(PlayerSpellsFrame_LoadUI) ~= "function" then
+        return false
+    end
+
+    local loaded = PlayerSpellsFrame_LoadUI()
+    return loaded and PlayerSpellsFrame and PlayerSpellsUtil
+end
+
 local function isSpellBookOpen()
     return PlayerSpellsFrame
         and PlayerSpellsFrame:IsShown()
@@ -37,11 +50,15 @@ local function hookSpellBookHide()
 end
 
 local function openSpellBookForEditor()
-    if not PlayerSpellsUtil or type(PlayerSpellsUtil.OpenToSpellBookTab) ~= "function" then
+    if not ensurePlayerSpellsLoaded() then
         return
     end
 
-    local playerSpellsWasShown = PlayerSpellsFrame and PlayerSpellsFrame:IsShown() or false
+    if type(PlayerSpellsUtil.OpenToSpellBookTab) ~= "function" then
+        return
+    end
+
+    local playerSpellsWasShown = PlayerSpellsFrame:IsShown()
     local spellBookWasOpen = isSpellBookOpen()
 
     PlayerSpellsUtil.OpenToSpellBookTab()
