@@ -1,6 +1,8 @@
 ## Interface: 120005, 120007, 120100
 ## Title: Lafee Macro Manager
+## Title-frFR: Lafee Macro Manager
 ## Notes: Edit character and global macros with a minimap button.
+## Notes-frFR: Modifiez les macros générales et de personnage avec un bouton de minicarte.
 ## Author: Lafee
 ## Version: 0.5.7
 ## OptionalDeps: ElvUI
@@ -8,5 +10,6 @@
 ## SavedVariables: LafeeMacroManagerGlobalDB
 ## SavedVariablesPerCharacter: LafeeMacroManagerDB
 
+Localization.lua
 EscapeClose.lua
 lafee_macro_manager.lua
