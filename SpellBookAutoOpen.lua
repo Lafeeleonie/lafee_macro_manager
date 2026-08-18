@@ -4,7 +4,7 @@ local minimapButtonName = addonName .. "MinimapButton"
 
 local openedSpellBookByLMM = false
 local editorFrameHooked = false
-local minimapHooked = false
+local minimapWrapped = false
 local slashWrapped = false
 local spellBookHideHooked = false
 local installAttempts = 0
@@ -52,8 +52,7 @@ local function hookSpellBookHide()
     PlayerSpellsFrame:HookScript("OnHide", function()
         local editorFrame = _G[frameName]
         if editorFrame and editorFrame:IsShown() then
-            -- The player closed the spellbook while LMM stayed open.
-            -- Do not claim ownership if they later reopen it themselves.
+            -- The player closed the spellbook manually while LMM stayed open.
             openedSpellBookByLMM = false
         end
     end)
@@ -65,24 +64,19 @@ local function openSpellBook()
     local playerSpellsWasShown = PlayerSpellsFrame and PlayerSpellsFrame:IsShown() or false
 
     if not ensurePlayerSpellsLoaded() then
-        return
+        return false
     end
 
-    local opened = false
-
-    if PlayerSpellsUtil and type(PlayerSpellsUtil.OpenToSpellBookTab) == "function" then
-        PlayerSpellsUtil.OpenToSpellBookTab()
-        opened = isSpellBookShown()
-    elseif type(TogglePlayerSpellsFrame) == "function"
-        and PlayerSpellsUtil
-        and PlayerSpellsUtil.FrameTabs
-    then
-        TogglePlayerSpellsFrame(PlayerSpellsUtil.FrameTabs.SpellBook)
-        opened = isSpellBookShown()
+    if not PlayerSpellsUtil or type(PlayerSpellsUtil.OpenToSpellBookTab) ~= "function" then
+        return false
     end
 
+    PlayerSpellsUtil.OpenToSpellBookTab()
     hookSpellBookHide()
+
+    local opened = isSpellBookShown()
     openedSpellBookByLMM = (not playerSpellsWasShown) and opened
+    return opened
 end
 
 local function closeSpellBook()
@@ -101,55 +95,83 @@ local function hookEditorFrame()
     end
 
     if not editorFrameHooked then
-        editorFrame:HookScript("OnShow", openSpellBook)
         editorFrame:HookScript("OnHide", closeSpellBook)
         editorFrameHooked = true
-
-        -- The first hook is installed after the first launcher click, so the
-        -- frame may already be visible. Open the spellbook immediately then.
-        if editorFrame:IsShown() then
-            openSpellBook()
-        end
     end
 
     return true
 end
 
-local function installLauncherHooks()
+local function openEditorAfterSpellBook(openEditor)
+    -- ShowUIPanel(PlayerSpellsFrame) can alter Blizzard panel state. Let it
+    -- finish first, then show LMM on the next UI tick so both remain visible.
+    openSpellBook()
+
+    C_Timer.After(0, function()
+        openEditor()
+        hookEditorFrame()
+    end)
+end
+
+local function installLauncherWrappers()
     installAttempts = installAttempts + 1
 
     local minimapButton = _G[minimapButtonName]
-    if minimapButton and not minimapHooked then
-        minimapButton:HookScript("OnClick", function(_, mouseButton)
-            if mouseButton == "LeftButton" then
-                hookEditorFrame()
-            end
-        end)
-        minimapHooked = true
+    if minimapButton and not minimapWrapped then
+        local originalOnClick = minimapButton:GetScript("OnClick")
+        if type(originalOnClick) == "function" then
+            minimapButton:SetScript("OnClick", function(button, mouseButton, ...)
+                if mouseButton ~= "LeftButton" then
+                    return originalOnClick(button, mouseButton, ...)
+                end
+
+                local editorFrame = _G[frameName]
+                if editorFrame and editorFrame:IsShown() then
+                    return originalOnClick(button, mouseButton, ...)
+                end
+
+                local args = { ... }
+                openEditorAfterSpellBook(function()
+                    originalOnClick(button, mouseButton, unpack(args))
+                end)
+            end)
+            minimapWrapped = true
+        end
     end
 
     if not slashWrapped and SlashCmdList and type(SlashCmdList.LAFEEMACROMANAGER) == "function" then
         local originalSlashHandler = SlashCmdList.LAFEEMACROMANAGER
         SlashCmdList.LAFEEMACROMANAGER = function(message)
-            originalSlashHandler(message)
-            hookEditorFrame()
+            local command = (message or ""):match("^%s*(.-)%s*$")
+            if command ~= "" then
+                return originalSlashHandler(message)
+            end
+
+            local editorFrame = _G[frameName]
+            if editorFrame and editorFrame:IsShown() then
+                return originalSlashHandler(message)
+            end
+
+            openEditorAfterSpellBook(function()
+                originalSlashHandler(message)
+            end)
         end
         slashWrapped = true
     end
 
-    if minimapHooked and slashWrapped then
+    if minimapWrapped and slashWrapped then
         return
     end
 
     -- PLAYER_LOGIN ordering can vary between frames. Retry briefly instead
     -- of silently giving up when the main addon has not created its launchers yet.
     if installAttempts < 30 then
-        C_Timer.After(0.1, installLauncherHooks)
+        C_Timer.After(0.1, installLauncherWrappers)
     end
 end
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:SetScript("OnEvent", function()
-    C_Timer.After(0, installLauncherHooks)
+    C_Timer.After(0, installLauncherWrappers)
 end)
