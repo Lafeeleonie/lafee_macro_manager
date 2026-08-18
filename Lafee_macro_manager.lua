@@ -110,6 +110,7 @@ local TEXT = IS_FRENCH and {
     minimapHidden = "Minimap button hidden. Use /lmm minimap to restore it.",
     help = "Commands: /lmm, /lmm global, /lmm character, /lmm reset, /lmm minimap, /lmm help.",
 }
+TEXT = _G.LafeeMacroManagerText or TEXT
 
 local function trim(text)
     if not text then
@@ -1778,7 +1779,7 @@ function ADDON:CreateUI()
 
     local globalTab = CreateFrame("Button", addonName .. "GlobalTab", frame, "PanelTabButtonTemplate")
     globalTab:SetID(1)
-    globalTab:SetText(IS_FRENCH and "Macros generales" or "General macros")
+    globalTab:SetText(IS_FRENCH and "Macros générales" or "General macros")
     globalTab:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 14, 2)
     globalTab:SetScript("OnClick", function(tabButton)
         PanelTemplates_SetTab(frame, tabButton:GetID())
