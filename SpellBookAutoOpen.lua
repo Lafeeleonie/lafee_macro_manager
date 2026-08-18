@@ -1,13 +1,17 @@
 local addonName = ...
 local frameName = addonName .. "Frame"
 local minimapButtonName = addonName .. "MinimapButton"
+local globalTabName = addonName .. "GlobalTab"
+local characterTabName = addonName .. "CharacterTab"
 
 local openedSpellBookByLMM = false
-local editorFrameHooked = false
-local minimapWrapped = false
-local slashWrapped = false
-local spellBookHideHooked = false
-local installAttempts = 0
+local editorHooked = false
+local spellBookHooksInstalled = false
+local launchHooksInstalled = false
+
+local function trim(text)
+    return (text or ""):match("^%s*(.-)%s*$") or ""
+end
 
 local function ensurePlayerSpellsLoaded()
     if PlayerSpellsFrame and PlayerSpellsUtil then
@@ -15,54 +19,56 @@ local function ensurePlayerSpellsLoaded()
     end
 
     if type(PlayerSpellsFrame_LoadUI) == "function" then
-        pcall(PlayerSpellsFrame_LoadUI)
+        local ok, loaded = pcall(PlayerSpellsFrame_LoadUI)
+        if ok and loaded ~= false and PlayerSpellsFrame and PlayerSpellsUtil then
+            return true
+        end
     end
 
-    if (not PlayerSpellsFrame or not PlayerSpellsUtil)
-        and C_AddOns
-        and type(C_AddOns.LoadAddOn) == "function"
-    then
+    if C_AddOns and type(C_AddOns.LoadAddOn) == "function" then
         pcall(C_AddOns.LoadAddOn, "Blizzard_PlayerSpells")
     end
 
     return PlayerSpellsFrame ~= nil and PlayerSpellsUtil ~= nil
 end
 
-local function isSpellBookShown()
-    if not PlayerSpellsFrame or not PlayerSpellsFrame:IsShown() then
-        return false
-    end
-
-    if not PlayerSpellsUtil or not PlayerSpellsUtil.FrameTabs then
-        return false
-    end
-
-    if type(PlayerSpellsFrame.IsFrameTabActive) ~= "function" then
-        return true
-    end
-
-    return PlayerSpellsFrame:IsFrameTabActive(PlayerSpellsUtil.FrameTabs.SpellBook)
+local function isSpellBookActive()
+    return PlayerSpellsFrame
+        and PlayerSpellsFrame:IsShown()
+        and PlayerSpellsUtil
+        and PlayerSpellsUtil.FrameTabs
+        and type(PlayerSpellsFrame.IsFrameTabActive) == "function"
+        and PlayerSpellsFrame:IsFrameTabActive(PlayerSpellsUtil.FrameTabs.SpellBook)
 end
 
-local function hookSpellBookHide()
-    if spellBookHideHooked or not PlayerSpellsFrame then
+local function installSpellBookHooks()
+    if spellBookHooksInstalled or not PlayerSpellsFrame then
         return
     end
 
     PlayerSpellsFrame:HookScript("OnHide", function()
-        local editorFrame = _G[frameName]
-        if editorFrame and editorFrame:IsShown() then
-            -- The player closed the spellbook manually while LMM stayed open.
-            openedSpellBookByLMM = false
-        end
+        -- If the player closes Blizzard's panel manually, LMM no longer owns it.
+        openedSpellBookByLMM = false
     end)
 
-    spellBookHideHooked = true
+    if type(PlayerSpellsFrame.SetTab) == "function" then
+        hooksecurefunc(PlayerSpellsFrame, "SetTab", function(frame)
+            -- Switching away from the spellbook transfers control back to the player.
+            if openedSpellBookByLMM
+                and PlayerSpellsUtil
+                and PlayerSpellsUtil.FrameTabs
+                and type(frame.IsFrameTabActive) == "function"
+                and not frame:IsFrameTabActive(PlayerSpellsUtil.FrameTabs.SpellBook)
+            then
+                openedSpellBookByLMM = false
+            end
+        end)
+    end
+
+    spellBookHooksInstalled = true
 end
 
 local function openSpellBook()
-    local playerSpellsWasShown = PlayerSpellsFrame and PlayerSpellsFrame:IsShown() or false
-
     if not ensurePlayerSpellsLoaded() then
         return false
     end
@@ -71,107 +77,97 @@ local function openSpellBook()
         return false
     end
 
-    PlayerSpellsUtil.OpenToSpellBookTab()
-    hookSpellBookHide()
+    local panelWasShown = PlayerSpellsFrame:IsShown()
 
-    local opened = isSpellBookShown()
-    openedSpellBookByLMM = (not playerSpellsWasShown) and opened
-    return opened
+    installSpellBookHooks()
+    PlayerSpellsUtil.OpenToSpellBookTab()
+
+    openedSpellBookByLMM = (not panelWasShown) and isSpellBookActive()
+    return isSpellBookActive()
 end
 
-local function closeSpellBook()
-    local shouldClose = openedSpellBookByLMM
+local function closeOwnedSpellBook()
+    local shouldClose = openedSpellBookByLMM and isSpellBookActive()
     openedSpellBookByLMM = false
 
-    if shouldClose and PlayerSpellsFrame and PlayerSpellsFrame:IsShown() then
+    if shouldClose then
         HideUIPanel(PlayerSpellsFrame)
     end
 end
 
-local function hookEditorFrame()
-    local editorFrame = _G[frameName]
-    if not editorFrame then
-        return false
+local function configureEditorFrame()
+    local frame = _G[frameName]
+    if not frame then
+        return nil
     end
 
-    if not editorFrameHooked then
-        editorFrame:HookScript("OnHide", closeSpellBook)
-        editorFrameHooked = true
+    -- PlayerSpellsFrame uses very high internal frame levels. Keep LMM above it
+    -- without entering DIALOG strata, so real Blizzard dialogs still win.
+    frame:SetFrameStrata("HIGH")
+    frame:SetFrameLevel(math.max(frame:GetFrameLevel() or 0, 6000))
+    frame:SetToplevel(true)
+
+    -- The main addon still contains a couple of old FR/EN-only tab labels.
+    -- Correct the visible labels from the standalone localization table here.
+    local text = _G.LafeeMacroManagerText
+    local globalTab = _G[globalTabName]
+    local characterTab = _G[characterTabName]
+    if text and globalTab and text.globalTab then
+        globalTab:SetText(text.globalTab)
+    end
+    if text and characterTab and text.characterTab then
+        characterTab:SetText(text.characterTab)
     end
 
-    return true
+    if not editorHooked then
+        frame:HookScript("OnHide", closeOwnedSpellBook)
+        editorHooked = true
+    end
+
+    return frame
 end
 
-local function openEditorAfterSpellBook(openEditor)
-    -- ShowUIPanel(PlayerSpellsFrame) can alter Blizzard panel state. Let it
-    -- finish first, then show LMM on the next UI tick so both remain visible.
-    openSpellBook()
-
-    C_Timer.After(0, function()
-        openEditor()
-        hookEditorFrame()
-    end)
+local function syncAfterLauncher()
+    local frame = configureEditorFrame()
+    if frame and frame:IsShown() then
+        openSpellBook()
+        -- Reassert the editor level after Blizzard finishes showing its panel.
+        frame:SetFrameStrata("HIGH")
+        frame:SetFrameLevel(math.max(frame:GetFrameLevel() or 0, 6000))
+        frame:Raise()
+    end
 end
 
-local function installLauncherWrappers()
-    installAttempts = installAttempts + 1
-
-    local minimapButton = _G[minimapButtonName]
-    if minimapButton and not minimapWrapped then
-        local originalOnClick = minimapButton:GetScript("OnClick")
-        if type(originalOnClick) == "function" then
-            minimapButton:SetScript("OnClick", function(button, mouseButton, ...)
-                if mouseButton ~= "LeftButton" then
-                    return originalOnClick(button, mouseButton, ...)
-                end
-
-                local editorFrame = _G[frameName]
-                if editorFrame and editorFrame:IsShown() then
-                    return originalOnClick(button, mouseButton, ...)
-                end
-
-                local args = { ... }
-                openEditorAfterSpellBook(function()
-                    originalOnClick(button, mouseButton, unpack(args))
-                end)
-            end)
-            minimapWrapped = true
-        end
-    end
-
-    if not slashWrapped and SlashCmdList and type(SlashCmdList.LAFEEMACROMANAGER) == "function" then
-        local originalSlashHandler = SlashCmdList.LAFEEMACROMANAGER
-        SlashCmdList.LAFEEMACROMANAGER = function(message)
-            local command = (message or ""):match("^%s*(.-)%s*$")
-            if command ~= "" then
-                return originalSlashHandler(message)
-            end
-
-            local editorFrame = _G[frameName]
-            if editorFrame and editorFrame:IsShown() then
-                return originalSlashHandler(message)
-            end
-
-            openEditorAfterSpellBook(function()
-                originalSlashHandler(message)
-            end)
-        end
-        slashWrapped = true
-    end
-
-    if minimapWrapped and slashWrapped then
+local function installLauncherHooks()
+    if launchHooksInstalled then
         return
     end
 
-    -- PLAYER_LOGIN ordering can vary between frames. Retry briefly instead
-    -- of silently giving up when the main addon has not created its launchers yet.
-    if installAttempts < 30 then
-        C_Timer.After(0.1, installLauncherWrappers)
+    local minimapButton = _G[minimapButtonName]
+    local slashReady = SlashCmdList and type(SlashCmdList.LAFEEMACROMANAGER) == "function"
+    if not minimapButton or not slashReady then
+        return
     end
+
+    minimapButton:HookScript("OnClick", function(_, mouseButton)
+        if mouseButton == "LeftButton" then
+            syncAfterLauncher()
+        end
+    end)
+
+    hooksecurefunc(SlashCmdList, "LAFEEMACROMANAGER", function(message)
+        if trim(message) == "" then
+            syncAfterLauncher()
+        end
+    end)
+
+    launchHooksInstalled = true
 end
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:SetScript("OnEvent", function()
-    C_Timer.After(0, installLauncherWrappers)
+    -- The main file creates the minimap button and slash handler on PLAYER_LOGIN.
+    -- Install after that event dispatch completes; no polling/retry loop is needed.
+    C_Timer.After(0, installLauncherHooks)
 end)

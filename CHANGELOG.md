@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.7 - 2026-08-19
+- Added all current WoW client localizations: enUS, frFR, deDE, esES, esMX, itIT, ptBR, ruRU, koKR, zhCN and zhTW.
+- Opening Lafee Macro Manager now automatically opens Blizzard's spellbook.
+- Reworked the spellbook integration around non-destructive post-launch hooks instead of replacing the minimap and slash-command handlers.
+- Removed the timer/retry opening chain that could leave the editor logically open but hidden behind PlayerSpellsFrame.
+- Keeps the editor above PlayerSpellsFrame with an explicit HIGH strata, top-level behavior and frame level while preserving Blizzard dialog priority.
+- The spellbook is closed with the editor only when LMM actually opened it and the player has not switched to another PlayerSpells tab.
+- Closing the spellbook manually or switching away from the spellbook releases LMM ownership of the Blizzard panel.
+- Removed the duplicate Escape registration path; UISpecialFrames is now registered only by the main editor creation code.
+- Applies the standalone localization table to the visible Global and Character tab labels.
+
 ## 0.5.5 - 2026-08-04
 - Added live blue highlighting for spell names recognized by the Retail spell API.
 - Supports spell operands in `#showtooltip`, `/cast`, `/castsequence`, `/castrandom`, `/use` and related spell commands.

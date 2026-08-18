@@ -12,6 +12,7 @@ It uses Blizzard's native macro system. Macros created or edited with the addon 
 - Keep the dynamic question-mark icon (`?`) when desired.
 - Highlight recognized macro commands and conditions, plus valid spell names in blue, while keeping one native interactive editor.
 - Select and replace macro text with the standard WoW mouse and keyboard behavior.
+- Automatically open Blizzard's spellbook when the macro editor is opened.
 - Insert a spell name from the spellbook with Shift + left-click or right-click while the editor is open.
 - Drag a macro from the left-hand list to an action bar.
 - Browse cached macros from your other characters and import them locally.
@@ -19,11 +20,11 @@ It uses Blizzard's native macro system. Macros created or edited with the addon 
 - Movable editor window with a saved position.
 - Movable minimap button that can be hidden.
 - Optional ElvUI skinning when ElvUI is installed.
-- French and English interface, selected automatically from the game locale.
+- Localized for all current WoW client locales: English, French, German, Spanish (EU and Latin America), Italian, Brazilian Portuguese, Russian, Korean, Simplified Chinese and Traditional Chinese.
 
 ## Retail compatibility
 
-Version 0.5.5 declares support for these Retail interface versions:
+Version 0.5.7 declares support for these Retail interface versions:
 
 - 12.0.5 (`120005`)
 - 12.0.7 (`120007`)
@@ -46,7 +47,7 @@ The final path should contain `Lafee_macro_manager.toc` directly inside the addo
 
 ## Getting started
 
-Click the minimap button or type `/lmm` to open the editor.
+Click the minimap button or type `/lmm` to open the editor. Blizzard's spellbook opens alongside it so spells are immediately available for Shift-click insertion.
 
 Use the two tabs to choose between:
 
@@ -65,7 +66,11 @@ Use `?`, `auto`, or the question-mark icon to keep Blizzard's automatic macro ic
 
 ## Spellbook insertion
 
+Opening Lafee Macro Manager also opens Blizzard's spellbook. The editor is kept above the spellbook so both remain usable at the same time.
+
 While the Lafee Macro Manager window is open, hold **Shift** and left-click or right-click a spell in the spellbook to insert its name at the editor cursor. If text is selected in the macro body, the spell name replaces that selection.
+
+If Lafee Macro Manager opened the spellbook, closing the editor also closes it. If the spellbook was already open, if you close it manually, or if you switch to another Player Spells tab such as Talents, Lafee Macro Manager leaves Blizzard's panel under your control.
 
 The addon listens to the current Retail `SpellBookItemMixin.OnModifiedClick` event and reads the spell directly from Blizzard's spellbook item data. Addons that completely replace Blizzard's spellbook may not emit this event; normal typing and pasting still work.
 

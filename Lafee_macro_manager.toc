@@ -11,6 +11,5 @@
 ## SavedVariablesPerCharacter: LafeeMacroManagerDB
 
 Localization.lua
-EscapeClose.lua
-lafee_macro_manager.lua
+Lafee_macro_manager.lua
 SpellBookAutoOpen.lua
