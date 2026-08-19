@@ -6,6 +6,7 @@ local openedSpellBookByLMM = false
 local editorHooked = false
 local spellBookHooksInstalled = false
 local launchersWrapped = false
+local pendingOpenGeneration = 0
 
 local function trim(text)
     return (text or ""):match("^%s*(.-)%s*$") or ""
@@ -45,13 +46,11 @@ local function installSpellBookHooks()
     end
 
     PlayerSpellsFrame:HookScript("OnHide", function()
-        -- A manual close means LMM must no longer claim ownership of the panel.
         openedSpellBookByLMM = false
     end)
 
     if type(PlayerSpellsFrame.SetTab) == "function" then
         hooksecurefunc(PlayerSpellsFrame, "SetTab", function(frame)
-            -- Switching away from the spellbook transfers control back to the player.
             if openedSpellBookByLMM
                 and PlayerSpellsUtil
                 and PlayerSpellsUtil.FrameTabs
@@ -99,8 +98,6 @@ local function configureEditorFrame()
         return nil
     end
 
-    -- PlayerSpellsFrame uses very high internal frame levels. Keep LMM above it
-    -- without entering DIALOG strata, so real Blizzard dialogs still win.
     frame:SetFrameStrata("HIGH")
     frame:SetFrameLevel(math.max(frame:GetFrameLevel() or 0, 6000))
     frame:SetToplevel(true)
@@ -126,6 +123,32 @@ local function finishOpeningEditor()
     end
 end
 
+local function openEditorAfterSpellBook(openEditor)
+    pendingOpenGeneration = pendingOpenGeneration + 1
+    local generation = pendingOpenGeneration
+
+    -- ShowUIPanel(PlayerSpellsFrame) can perform additional panel/layout work while
+    -- it is opening. Let that finish, then open LMM on the next UI tick and raise it.
+    openSpellBook()
+
+    C_Timer.After(0, function()
+        if generation ~= pendingOpenGeneration then
+            return
+        end
+
+        local frame = _G[frameName]
+        if not frame or not frame:IsShown() then
+            openEditor()
+        end
+
+        finishOpeningEditor()
+    end)
+end
+
+local function cancelPendingOpen()
+    pendingOpenGeneration = pendingOpenGeneration + 1
+end
+
 local function installLauncherWrappers()
     if launchersWrapped then
         return
@@ -142,8 +165,6 @@ local function installLauncherWrappers()
         return
     end
 
-    -- Opening PlayerSpellsFrame after LMM can hide the editor through Blizzard's
-    -- panel management. Open the spellbook first, then run LMM's native toggle.
     minimapButton:SetScript("OnClick", function(button, mouseButton, ...)
         if mouseButton ~= "LeftButton" then
             return originalOnClick(button, mouseButton, ...)
@@ -151,27 +172,31 @@ local function installLauncherWrappers()
 
         local editorFrame = _G[frameName]
         if editorFrame and editorFrame:IsShown() then
+            cancelPendingOpen()
             return originalOnClick(button, mouseButton, ...)
         end
 
-        openSpellBook()
-        originalOnClick(button, mouseButton, ...)
-        finishOpeningEditor()
+        local args = { ... }
+        openEditorAfterSpellBook(function()
+            originalOnClick(button, mouseButton, unpack(args))
+        end)
     end)
 
     SlashCmdList.LAFEEMACROMANAGER = function(message)
         if trim(message) ~= "" then
+            cancelPendingOpen()
             return originalSlashHandler(message)
         end
 
         local editorFrame = _G[frameName]
         if editorFrame and editorFrame:IsShown() then
+            cancelPendingOpen()
             return originalSlashHandler(message)
         end
 
-        openSpellBook()
-        originalSlashHandler(message)
-        finishOpeningEditor()
+        openEditorAfterSpellBook(function()
+            originalSlashHandler(message)
+        end)
     end
 
     launchersWrapped = true
@@ -180,7 +205,7 @@ end
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:SetScript("OnEvent", function()
-    -- The main file creates both launchers on PLAYER_LOGIN. Defer once so we can
-    -- wrap the final native handlers without polling or repeated timers.
+    -- The main file creates both launchers on PLAYER_LOGIN. Install after the
+    -- event dispatch completes; this is setup only, not the opening delay above.
     C_Timer.After(0, installLauncherWrappers)
 end)
