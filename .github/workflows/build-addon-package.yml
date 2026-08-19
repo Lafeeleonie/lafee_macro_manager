@@ -1,0 +1,55 @@
+name: Build addon package
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - lafee_macro_manager.zip
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build CurseForge-ready ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf package
+          mkdir -p package/lafee_macro_manager
+
+          cp Lafee_macro_manager.toc package/lafee_macro_manager/
+          cp Localization.lua package/lafee_macro_manager/
+          cp Lafee_macro_manager.lua package/lafee_macro_manager/
+          cp LocalizationRuntime.lua package/lafee_macro_manager/
+          cp SpellBookAutoOpen.lua package/lafee_macro_manager/
+          cp CHANGELOG.md package/lafee_macro_manager/
+          cp README.md package/lafee_macro_manager/
+
+          rm -f lafee_macro_manager.zip
+          (
+            cd package
+            zip -r ../lafee_macro_manager.zip lafee_macro_manager
+          )
+
+      - name: Commit refreshed package
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lafee_macro_manager.zip
+
+          if git diff --cached --quiet; then
+            echo "Package is already current."
+            exit 0
+          fi
+
+          git commit -m "Build addon package [skip ci]"
+          git push
