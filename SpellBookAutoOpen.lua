@@ -5,7 +5,7 @@ local minimapButtonName = addonName .. "MinimapButton"
 local openedSpellBookByLMM = false
 local editorHooked = false
 local spellBookHooksInstalled = false
-local launchHooksInstalled = false
+local launchersWrapped = false
 
 local function trim(text)
     return (text or ""):match("^%s*(.-)%s*$") or ""
@@ -45,7 +45,7 @@ local function installSpellBookHooks()
     end
 
     PlayerSpellsFrame:HookScript("OnHide", function()
-        -- If the player closes Blizzard's panel manually, LMM no longer owns it.
+        -- A manual close means LMM must no longer claim ownership of the panel.
         openedSpellBookByLMM = false
     end)
 
@@ -117,47 +117,70 @@ local function configureEditorFrame()
     return frame
 end
 
-local function syncAfterLauncher()
+local function finishOpeningEditor()
     local frame = configureEditorFrame()
     if frame and frame:IsShown() then
-        openSpellBook()
-        -- Reassert the editor level after Blizzard finishes showing its panel.
         frame:SetFrameStrata("HIGH")
         frame:SetFrameLevel(math.max(frame:GetFrameLevel() or 0, 6000))
         frame:Raise()
     end
 end
 
-local function installLauncherHooks()
-    if launchHooksInstalled then
+local function installLauncherWrappers()
+    if launchersWrapped then
         return
     end
 
     local minimapButton = _G[minimapButtonName]
-    local slashReady = SlashCmdList and type(SlashCmdList.LAFEEMACROMANAGER) == "function"
-    if not minimapButton or not slashReady then
+    local originalSlashHandler = SlashCmdList and SlashCmdList.LAFEEMACROMANAGER
+    if not minimapButton or type(originalSlashHandler) ~= "function" then
         return
     end
 
-    minimapButton:HookScript("OnClick", function(_, mouseButton)
-        if mouseButton == "LeftButton" then
-            syncAfterLauncher()
+    local originalOnClick = minimapButton:GetScript("OnClick")
+    if type(originalOnClick) ~= "function" then
+        return
+    end
+
+    -- Opening PlayerSpellsFrame after LMM can hide the editor through Blizzard's
+    -- panel management. Open the spellbook first, then run LMM's native toggle.
+    minimapButton:SetScript("OnClick", function(button, mouseButton, ...)
+        if mouseButton ~= "LeftButton" then
+            return originalOnClick(button, mouseButton, ...)
         end
+
+        local editorFrame = _G[frameName]
+        if editorFrame and editorFrame:IsShown() then
+            return originalOnClick(button, mouseButton, ...)
+        end
+
+        openSpellBook()
+        originalOnClick(button, mouseButton, ...)
+        finishOpeningEditor()
     end)
 
-    hooksecurefunc(SlashCmdList, "LAFEEMACROMANAGER", function(message)
-        if trim(message) == "" then
-            syncAfterLauncher()
+    SlashCmdList.LAFEEMACROMANAGER = function(message)
+        if trim(message) ~= "" then
+            return originalSlashHandler(message)
         end
-    end)
 
-    launchHooksInstalled = true
+        local editorFrame = _G[frameName]
+        if editorFrame and editorFrame:IsShown() then
+            return originalSlashHandler(message)
+        end
+
+        openSpellBook()
+        originalSlashHandler(message)
+        finishOpeningEditor()
+    end
+
+    launchersWrapped = true
 end
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:SetScript("OnEvent", function()
-    -- The main file creates the minimap button and slash handler on PLAYER_LOGIN.
-    -- Install after that event dispatch completes; no polling/retry loop is needed.
-    C_Timer.After(0, installLauncherHooks)
+    -- The main file creates both launchers on PLAYER_LOGIN. Defer once so we can
+    -- wrap the final native handlers without polling or repeated timers.
+    C_Timer.After(0, installLauncherWrappers)
 end)
