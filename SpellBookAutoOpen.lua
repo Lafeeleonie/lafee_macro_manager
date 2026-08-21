@@ -1,6 +1,6 @@
 local addonName = ...
 local frameName = addonName .. "Frame"
-local minimapButtonName = addonName .. "MinimapButton"
+local minimapButtonName = "LibDBIcon10_Lafee Macro Manager"
 
 local openedSpellBookByLMM = false
 local editorHooked = false

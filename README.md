@@ -30,7 +30,7 @@ Version 0.5.7 declares support for these Retail interface versions:
 - 12.0.7 (`120007`)
 - 12.1.0 (`120100`)
 
-ElvUI is optional. Lafee Macro Manager does not modify ElvUI files and does not require any external library.
+ElvUI is optional. Lafee Macro Manager does not modify ElvUI files. Its LibDataBroker/LibDBIcon minimap dependencies are bundled with the addon.
 
 ## Installation
 
@@ -90,7 +90,7 @@ Important limitations:
 
 - **Left-click:** open or close the editor.
 - **Right-click:** switch between Global and Character tabs.
-- **Drag:** move the button around the minimap.
+- **Drag:** move the LibDBIcon button around the minimap.
 
 The position and visibility of the minimap button are saved account-wide.
 
@@ -138,7 +138,7 @@ When reporting a problem, include the full Lua error, your WoW version, the addo
 
 ## Privacy and dependencies
 
-Lafee Macro Manager does not send data outside the game and has no required third-party dependencies. ElvUI support is optional and uses the installed ElvUI skinning API without changing ElvUI itself.
+Lafee Macro Manager does not send data outside the game. Its minimap libraries are bundled; ElvUI support is optional and uses the installed ElvUI skinning API without changing ElvUI itself.
 
 ## Feedback
 

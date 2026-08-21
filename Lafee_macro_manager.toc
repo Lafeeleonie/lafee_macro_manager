@@ -10,6 +10,7 @@
 ## SavedVariables: LafeeMacroManagerGlobalDB
 ## SavedVariablesPerCharacter: LafeeMacroManagerDB
 
+Libraries/Init.xml
 Localization.lua
 Lafee_macro_manager.lua
 LocalizationRuntime.lua

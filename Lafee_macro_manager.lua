@@ -1,5 +1,6 @@
 local addonName = ...
 local DISPLAY_NAME = "Lafee Macro Manager"
+local MINIMAP_BROKER_NAME = "Lafee Macro Manager"
 
 local ADDON = {}
 local CHARACTER_MACRO_LIMIT = MAX_CHARACTER_MACROS or 30
@@ -8,6 +9,8 @@ local MACRO_FALLBACK_ICON = "INV_Misc_QuestionMark"
 local MINIMAP_ICON = "Interface\\Icons\\INV_Scroll_03"
 local ROWS_PER_PAGE = 10
 local DEFAULT_MINIMAP_ANGLE = 225
+local LDB = LibStub("LibDataBroker-1.1")
+local DBIcon = LibStub("LibDBIcon-1.0")
 local ADDON_VERSION = "0.5.7"
 local IS_FRENCH = GetLocale() == "frFR"
 local DEBUG_SPELLBOOK = false
@@ -443,8 +446,13 @@ function ADDON:EnsureDB()
     LafeeMacroManagerGlobalDB.version = 2
     LafeeMacroManagerGlobalDB.minimap = LafeeMacroManagerGlobalDB.minimap or {
         angle = DEFAULT_MINIMAP_ANGLE,
+        minimapPos = DEFAULT_MINIMAP_ANGLE,
         hide = false,
     }
+    local minimap = LafeeMacroManagerGlobalDB.minimap
+    minimap.hide = minimap.hide == true
+    minimap.minimapPos = tonumber(minimap.minimapPos) or tonumber(minimap.angle) or DEFAULT_MINIMAP_ANGLE
+    minimap.angle = minimap.minimapPos
     LafeeMacroManagerGlobalDB.characters = LafeeMacroManagerGlobalDB.characters or {}
     LafeeMacroManagerDB.characterKey = LafeeMacroManagerDB.characterKey or self:GetCharacterKey()
 end
@@ -1594,94 +1602,52 @@ function ADDON:RegisterSpellbookCallback()
 end
 
 function ADDON:UpdateMinimapButtonPosition()
-    if not self.minimapButton then
+    if not DBIcon:IsRegistered(MINIMAP_BROKER_NAME) then
         return
     end
 
     self:EnsureDB()
-    local angle = math.rad(LafeeMacroManagerGlobalDB.minimap.angle or DEFAULT_MINIMAP_ANGLE)
-    local radius = 80
-    local x = math.cos(angle) * radius
-    local y = math.sin(angle) * radius
-
-    self.minimapButton:ClearAllPoints()
-    self.minimapButton:SetPoint("CENTER", Minimap, "CENTER", x, y)
-    self.minimapButton:SetShown(not LafeeMacroManagerGlobalDB.minimap.hide)
+    local minimap = LafeeMacroManagerGlobalDB.minimap
+    minimap.angle = tonumber(minimap.minimapPos) or minimap.angle
+    DBIcon:Refresh(MINIMAP_BROKER_NAME, minimap)
+    if minimap.hide then
+        DBIcon:Hide(MINIMAP_BROKER_NAME)
+    else
+        DBIcon:Show(MINIMAP_BROKER_NAME)
+    end
+    self.minimapButton = DBIcon:GetMinimapButton(MINIMAP_BROKER_NAME)
 end
 
 function ADDON:CreateMinimapButton()
-    if self.minimapButton then
-        return
+    self:EnsureDB()
+    if not self.minimapDataObject then
+        self.minimapDataObject = LDB:NewDataObject(MINIMAP_BROKER_NAME, {
+            type = "launcher",
+            text = DISPLAY_NAME,
+            icon = MINIMAP_ICON,
+            OnClick = function(_, mouseButton)
+                if mouseButton == "RightButton" then
+                    if self:GetScope() == "character" then
+                        self:SetScope("global")
+                    else
+                        self:SetScope("character")
+                    end
+                    self:Print(string.format(TEXT.scopeSwitched, self:GetScopeConfig(self:GetScope()).label))
+                elseif mouseButton == "LeftButton" then
+                    self:ToggleUI()
+                end
+            end,
+            OnTooltipShow = function(tooltip)
+                tooltip:AddLine(DISPLAY_NAME)
+                tooltip:AddLine(TEXT.tooltipOpen, 0.9, 0.9, 0.9)
+                tooltip:AddLine(TEXT.tooltipSwitch, 0.9, 0.9, 0.9)
+                tooltip:AddLine(TEXT.tooltipDrag, 0.9, 0.9, 0.9)
+            end,
+        })
     end
-
-    local button = CreateFrame("Button", addonName .. "MinimapButton", Minimap)
-    button:SetSize(32, 32)
-    button:SetFrameStrata("MEDIUM")
-    button:SetMovable(true)
-    button:EnableMouse(true)
-    button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    button:RegisterForDrag("LeftButton")
-
-    local icon = button:CreateTexture(nil, "ARTWORK", nil, 1)
-    icon:SetTexture(MINIMAP_ICON)
-    icon:SetSize(22, 22)
-    icon:SetPoint("CENTER")
-    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-    button.icon = icon
-
-    button:SetScript("OnClick", function(_, mouseButton)
-        if mouseButton == "RightButton" then
-            if self:GetScope() == "character" then
-                self:SetScope("global")
-            else
-                self:SetScope("character")
-            end
-            self:Print(string.format(TEXT.scopeSwitched, self:GetScopeConfig(self:GetScope()).label))
-            return
-        end
-
-        self:ToggleUI()
-    end)
-
-    button:SetScript("OnDragStart", function()
-        button.isDragging = true
-    end)
-
-    button:SetScript("OnDragStop", function()
-        button.isDragging = false
-    end)
-
-    button:SetScript("OnUpdate", function()
-        if not button.isDragging then
-            return
-        end
-
-        local mx, my = Minimap:GetCenter()
-        local px, py = GetCursorPosition()
-        local scale = UIParent:GetEffectiveScale()
-        px = px / scale
-        py = py / scale
-
-        local angle = math.deg(math.atan(py - my, px - mx))
-        LafeeMacroManagerGlobalDB.minimap.angle = angle
-        ADDON:UpdateMinimapButtonPosition()
-    end)
-
-    button:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(button, "ANCHOR_LEFT")
-        GameTooltip:AddLine("Lafee Macro Manager")
-        GameTooltip:AddLine(TEXT.tooltipOpen, 0.9, 0.9, 0.9)
-        GameTooltip:AddLine(TEXT.tooltipSwitch, 0.9, 0.9, 0.9)
-        GameTooltip:AddLine(TEXT.tooltipDrag, 0.9, 0.9, 0.9)
-        GameTooltip:Show()
-    end)
-
-    button:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
-
-    self.minimapButton = button
+    if not DBIcon:IsRegistered(MINIMAP_BROKER_NAME) then
+        DBIcon:Register(MINIMAP_BROKER_NAME, self.minimapDataObject, LafeeMacroManagerGlobalDB.minimap)
+    end
     self:UpdateMinimapButtonPosition()
 end
 
